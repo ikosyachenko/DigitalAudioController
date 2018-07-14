@@ -5,24 +5,16 @@
 * TODO:
 * Save settings to EEPROM on power down or after period of inactivity
 * Overtemp warning/shutdown
+*
+* I. Kosyachenko
+* Lite version for Arduino Uno and LCD 1602A
 */
 #include <Encoder.h>
-#include <OLEDFourBit.h>
+#include <LiquidCrystal.h>  // Лобавляем необходимую библиотеку
 #include <Wire.h>
 
-// LCD pins
-#define RS 12 //AVR 18
-#define RW 10 //AVR 16
-#define E 11  //AVR 17
-#define DB4 4 //AVR 6
-#define DB5 5 //AVR 11
-#define DB6 6 //AVR 12
-#define DB7 7 //AVR 13
-// LM35
-#define TEMP 0 //AVR 23
-#define TEMP_ROLLING_AVG 10
 // Encoder button
-#define BTN 9 //AVR 15
+#define BTN 8A //AVR 15
 
 // interface
 #define SELECTION_MARKER '>'
@@ -36,9 +28,9 @@
 #define BASS_MAX 14
 #define BASS_MIN -14
 
-OLEDFourBit oled(RS, RW, E, DB4, DB5, DB6, DB7);
+LiquidCrystal lcd(7, 6, 5, 4, 3, 2); // (RS, E, DB4, DB5, DB6, DB7)
 
-Encoder enc(2,3);
+Encoder enc(10,11);
 long oldPosition = -999;
 long newPosition = 0;
 boolean encUpdated = true;
@@ -80,22 +72,6 @@ boolean buttonDown = false;
 boolean buttonUp = false;
 boolean selectionUpdated = false;
 
-// Temp sensor
-boolean tempUpdated = true;
-unsigned int tempSampleDelay = 0;
-float avgTemp = 0; // init to 18c
-float tempLog[TEMP_ROLLING_AVG];
-int currentTempIndex = 0;
-float totalTemp = 0;
-
-
-float readTemp()
-{
-  // LM35 is 10mv/1deg c
-  // analogRead maps 0-1.1v to 0-1023 (using internal reference)
-  return analogRead(TEMP)/9.31;
-}
-
 void buttonCycled()
 {
   //button cycled
@@ -114,100 +90,100 @@ void buttonCycled()
 
 void renderEncoderChange()
 {
-  oled.setCursor(13,3);
+  lcd.setCursor(13,3);
 
   if(cursorSelection == VOLUME)
   {
     if(volPosition < -9) // 6 chars
     {
-      oled.setCursor(12,3);
+      lcd.setCursor(12,3);
     }
     else if(volPosition == 0) // 4 chars
     {
-      oled.setCursor(12,3);
-      oled.print("  "); // clear sign any old digit
-      oled.setCursor(14,3);
+      lcd.setCursor(12,3);
+      lcd.print("  "); // clear sign any old digit
+      lcd.setCursor(14,3);
     }
     else // 5 chars
     {
-      oled.setCursor(12,3);
-      oled.print(" "); // clear sign any old digit
-      oled.setCursor(13,3);
+      lcd.setCursor(12,3);
+      lcd.print(" "); // clear sign any old digit
+      lcd.setCursor(13,3);
     }
-    oled.print(volPosition);
+    lcd.print(volPosition);
   }
 
   else if(cursorSelection == TREB)
   {
     if(trebPosition > 9) // two digits
     {
-      oled.setCursor(15,3);
-      oled.print(" "); // clear old sign
-      oled.setCursor(16,3);
+      lcd.setCursor(15,3);
+      lcd.print(" "); // clear old sign
+      lcd.setCursor(16,3);
     }
     else if(trebPosition >= 0) // one digit
     {
-      oled.setCursor(15,3);
-      oled.print("  ");
-      oled.setCursor(17,3);
+      lcd.setCursor(15,3);
+      lcd.print("  ");
+      lcd.setCursor(17,3);
     }
     else if(trebPosition < -9)// sign + two digits
     {
-      oled.setCursor(15,3);
+      lcd.setCursor(15,3);
     }
     else // sign + one digit
     {
-      oled.setCursor(15,3);
-      oled.print(" ");
-      oled.setCursor(16,3);
+      lcd.setCursor(15,3);
+      lcd.print(" ");
+      lcd.setCursor(16,3);
     }
-    oled.print(trebPosition, DEC);
+    lcd.print(trebPosition, DEC);
   }
 
   else if(cursorSelection == BASS)
   {
     if(bassPosition > 9) // two digits
     {
-      oled.setCursor(15,3);
-      oled.print(" "); // clear old sign
-      oled.setCursor(16,3);
+      lcd.setCursor(15,3);
+      lcd.print(" "); // clear old sign
+      lcd.setCursor(16,3);
     }
     else if(bassPosition >= 0) // one digit
     {
-      oled.setCursor(15,3);
-      oled.print("  ");
-      oled.setCursor(17,3);
+      lcd.setCursor(15,3);
+      lcd.print("  ");
+      lcd.setCursor(17,3);
     }
     else if(bassPosition < -9)// sign + two digits
     {
-      oled.setCursor(15,3);
+      lcd.setCursor(15,3);
     }
     else // sign + one digit
     {
-      oled.setCursor(15,3);
-      oled.print(" ");
-      oled.setCursor(16,3);
+      lcd.setCursor(15,3);
+      lcd.print(" ");
+      lcd.setCursor(16,3);
     }
-    oled.print(bassPosition, DEC);
+    lcd.print(bassPosition, DEC);
   }
 
   if(volChanged)
   {
-    oled.setCursor(5,0);
+    lcd.setCursor(5,0);
     renderVolumeGraph(volPosition);
     volChanged = false;
   }
 
   else if(trebChanged)
   {
-    oled.setCursor(5,1);
+    lcd.setCursor(5,1);
     renderToneGraph(trebPosition);
     trebChanged = false;
   }
 
   else if(bassChanged)
   {
-    oled.setCursor(5,2);
+    lcd.setCursor(5,2);
     renderToneGraph(bassPosition);
     bassChanged = false;
   }
@@ -216,29 +192,22 @@ void renderEncoderChange()
 void renderSelectionChange()
 {
   // clear existing cursors
-  oled.setCursor(3,0);
-  oled.print(' ');
-  oled.setCursor(3,1);
-  oled.print(' ');
-  oled.setCursor(3,2);
-  oled.print(' ');
+  lcd.setCursor(3,0);
+  lcd.print(' ');
+  lcd.setCursor(3,1);
+  lcd.print(' ');
+  lcd.setCursor(3,2);
+  lcd.print(' ');
   // print updated location
-  oled.setCursor(3,cursorSelection);
-  oled.print(SELECTION_MARKER);
+  lcd.setCursor(3,cursorSelection);
+  lcd.print(SELECTION_MARKER);
   // clear old encoder value
-  oled.setCursor(10,3);
-  oled.print("        ");
+  lcd.setCursor(10,3);
+  lcd.print("        ");
   // encoder value will also have changed to its relevant vol/treb/bass value
   renderEncoderChange();
 }
 
-void renderTempChange()
-{
-  oled.setCursor(0,3);
-  oled.print("TEMP ");
-  oled.print(avgTemp, 1);
-  oled.print("c");
-}
 
 void sendByte(byte data)
 {
@@ -382,34 +351,26 @@ void setup()
   Wire.begin();
   tdaInit();
 
-  // use internal 1V1 reference for maximum LM35 resolution
-  analogReference(INTERNAL);
-
-  oled.begin(20,4);
-  //oled.print("Loading...");
-  oled.createChar(0, graphBlock);
-  oled.setCursor(0,0);
+  lcd.begin(16,2);
+  //lcd.print("Loading...");
+  lcd.createChar(0, graphBlock);
+  lcd.setCursor(0,0);
   //delay(2000);
 
-  oled.print("VOL>|");
-  oled.write(0);
-  oled.write(0);
-  oled.print("            |"); // print default volume graph for -40db
-  oled.setCursor(0,1);
-  oled.print("TRB |     FLAT     |");
-  oled.setCursor(0,2);
-  oled.print("BAS |     FLAT     |");
-  oled.setCursor(18,3);
-  oled.print("dB");
+  lcd.print("VOL>|");
+  lcd.write((byte) 0);
+  lcd.write((byte) 0);
+  lcd.print("            |"); // print default volume graph for -40db
+  lcd.setCursor(0,1);
+  lcd.print("TRB |     FLAT     |");
+  lcd.setCursor(0,2);
+  lcd.print("BAS |     FLAT     |");
+  lcd.setCursor(18,3);
+  lcd.print("dB");
 
   volChanged = true;
   renderEncoderChange(); // show initial volume
 
-  // init temp sensor readings
-  for(int i = 0; i < TEMP_ROLLING_AVG; i++)
-  {
-    tempLog[i] = 0;
-  }
 }
 
 void loop()
@@ -433,26 +394,6 @@ void loop()
     encUpdated = false;
   }
 
-  // read temp and avg
-  if(tempSampleDelay > 10000)
-  {
-    totalTemp -= tempLog[currentTempIndex]; // remove last reading at current index
-    tempLog[currentTempIndex] = readTemp();
-    totalTemp += tempLog[currentTempIndex];
-    currentTempIndex++;
-    if(currentTempIndex == TEMP_ROLLING_AVG)
-    {
-      currentTempIndex = 0;
-    }
-    avgTemp = totalTemp / TEMP_ROLLING_AVG;
-    tempUpdated = true;
-    tempSampleDelay = 0;
-  }
-  else
-  {
-    tempUpdated = false;
-    tempSampleDelay++;
-  }
 
   // button
   buttonState = digitalRead(BTN);
@@ -497,10 +438,10 @@ void loop()
   }
 
   // update display
-  if(tempUpdated)
-  {
-    renderTempChange();
-  }
+//  if(tempUpdated)
+//  {
+//    renderTempChange();
+//  }
   if(encUpdated)
   {
     renderEncoderChange();
@@ -518,62 +459,62 @@ void renderToneGraph(int position)
   switch (position)
   {
     case -14:
-      oled.write(0);
-      oled.print("             ");
+      lcd.write((byte) 0);
+      lcd.print("             ");
       break;
     case -12:
-      oled.write(0);oled.write(0);
-      oled.print("            ");
+      lcd.write((byte) 0);lcd.write((byte) 0);
+      lcd.print("            -");
       break;
     case -10:
-      oled.write(0);oled.write(0);oled.write(0);
-      oled.print("           ");
+      lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);
+      lcd.print("           ");
       break;
     case -8:
-      oled.write(0);oled.write(0);oled.write(0);oled.write(0);
-      oled.print("          ");
+      lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);
+      lcd.print("          ");
       break;
     case -6:
-      oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);
-      oled.print("         ");
+      lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);
+      lcd.print("         ");
       break;
     case -4:
-      oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);
-      oled.print("        ");
+      lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);
+      lcd.print("        ");
       break;
     case -2:
-      oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);
-      oled.print("       ");
+      lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);
+      lcd.print("       ");
       break;
     case 0:
-      oled.print("     FLAT     ");
+      lcd.print("     FLAT     ");
       break;
     case 2:
-      oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);
-      oled.print("      ");
+      lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);
+      lcd.print("      ");
       break;
     case 4:
-      oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);
-      oled.print("     ");
+      lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);
+      lcd.print("     ");
       break;
     case 6:
-      oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);
-      oled.print("    ");
+      lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);
+      lcd.print("    ");
       break;
     case 8:
-      oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);
-      oled.print("   ");
+      lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);
+      lcd.print("   ");
       break;
     case 10:
-      oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);
-      oled.print("  ");
+      lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);
+      lcd.print("  ");
       break;
     case 12:
-      oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);
-      oled.print(" ");
+      lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);
+      lcd.print(" ");
       break;
     case 14:
-      oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);oled.write(0);
+      lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);lcd.write((byte) 0);
       break;
   }
 }
@@ -588,15 +529,15 @@ void renderVolumeGraph(int position)
   if(position > -50)
   {
     int segments = mapVolumeValues(position);
-    oled.setCursor(5,0);
+    lcd.setCursor(5,0);
     for(int i=0; i< segments; i++)
     {
-      oled.write(0);
+      lcd.write((byte) 0);
     }
     int blankSpace = 14-segments;
     for(int j=0; j< blankSpace; j++)
     {
-      oled.print(" ");
+      lcd.print(" ");
     }
   }
 }
