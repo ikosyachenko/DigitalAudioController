@@ -7,7 +7,7 @@
 * Overtemp warning/shutdown
 *
 * I. Kosyachenko
-* Lite version for Arduino Uno and LCD 1602A
+* Lite version for Arduino Uno and LCD 1604
 */
 #include <Encoder.h>
 #include <LiquidCrystal.h>  // Лобавляем необходимую библиотеку
@@ -437,11 +437,6 @@ void loop()
     bassUpdateQueued = false;
   }
 
-  // update display
-//  if(tempUpdated)
-//  {
-//    renderTempChange();
-//  }
   if(encUpdated)
   {
     renderEncoderChange();
